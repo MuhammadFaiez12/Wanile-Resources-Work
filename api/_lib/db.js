@@ -1,9 +1,10 @@
 import { createClient } from '@libsql/client';
 
 // In production set TURSO_DATABASE_URL (libsql://…) + TURSO_AUTH_TOKEN.
-// Locally, with neither set, we fall back to a SQLite file so `vercel dev`
-// and the seed script work offline with zero setup.
-const url = process.env.TURSO_DATABASE_URL || 'file:local.db';
+// Without them: use /tmp (writable on Vercel) or a local file in dev.
+const url =
+  process.env.TURSO_DATABASE_URL ||
+  (process.env.VERCEL ? 'file:/tmp/local.db' : 'file:local.db');
 const authToken = process.env.TURSO_AUTH_TOKEN || undefined;
 
 export const db = createClient({ url, authToken });
