@@ -144,7 +144,7 @@ function Dashboard({ onLogout }) {
   async function testReminder() {
     setReminderMsg('Sending…');
     try {
-      const r = await api.post('/reminder/test');
+      const r = await api.post('/reminder');
       setReminderMsg(r.data?.ok ? '✅ Reminder sent to Slack!' : `⚠️ ${r.data?.error || 'Slack not configured'}`);
     } catch {
       setReminderMsg('⚠️ Failed to send reminder');

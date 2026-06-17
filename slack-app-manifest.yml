@@ -1,7 +1,8 @@
 # Slack App Manifest for the Daily Work Report reminder bot.
 # Create the app at https://api.slack.com/apps → "From an app manifest",
 # paste this, then install to your workspace and copy the Bot Token (xoxb-)
-# and Signing Secret into server/.env.
+# into the SLACK_BOT_TOKEN env var (Vercel project settings or .env.local).
+# Outbound posting uses only chat:write — no signing secret needed.
 display_information:
   name: Daily Report Bot
   description: Sends daily work-report reminders and PM submission notifications.

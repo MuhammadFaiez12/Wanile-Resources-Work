@@ -1,0 +1,15 @@
+{
+  "name": "dwr-vercel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily Work Report & PM Analytics System — Vercel serverless functions",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "@slack/web-api": "^7.8.0"
+  }
+}

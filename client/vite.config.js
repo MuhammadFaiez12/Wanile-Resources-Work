@@ -7,8 +7,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Forward API calls to the Express server during development.
-      '/api': 'http://localhost:4000',
+      // For local dev prefer `vercel dev` (serves UI + /api functions on :3000).
+      // This proxy only matters if you run Vite standalone alongside it.
+      '/api': 'http://localhost:3000',
     },
   },
 });
