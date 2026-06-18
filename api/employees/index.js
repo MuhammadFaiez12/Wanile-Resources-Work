@@ -14,10 +14,10 @@ export default async function handler(req, res) {
     const name = (req.body?.name || '').trim();
     if (!name) return json(res, 400, { error: 'Name is required' });
     try {
-      const r = await db.execute({ sql: 'INSERT INTO employees (name) VALUES (?)', args: [name] });
-      return json(res, 201, { id: Number(r.lastInsertRowid), name });
+      const r = await db.execute({ sql: 'INSERT INTO employees (name) VALUES (?) RETURNING id', args: [name] });
+      return json(res, 201, { id: Number(r.rows[0].id), name });
     } catch (e) {
-      if (String(e.message).includes('UNIQUE')) {
+      if (/unique|duplicate/i.test(String(e.message))) {
         return json(res, 409, { error: 'Employee already exists' });
       }
       return json(res, 500, { error: 'Could not add employee' });

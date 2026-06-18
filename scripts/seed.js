@@ -1,6 +1,6 @@
-// Populate the database with sample reports so the dashboard has data.
-//   Local file DB:   npm run seed
-//   Against Turso:   TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... npm run seed
+// Populate the Supabase database with sample reports so the dashboard has data.
+//   POSTGRES_URL=postgres://… npm run seed
+// (locally, load it via: node --env-file-if-exists=.env.local scripts/seed.js)
 import { db, init } from '../api/_lib/db.js';
 
 await init();
@@ -27,7 +27,7 @@ const rand = (a) => a[Math.floor(Math.random() * a.length)];
 
 await db.execute('DELETE FROM reports');
 
-const stmts = [];
+let inserted = 0;
 const today = new Date();
 for (let d = 13; d >= 0; d--) {
   const day = new Date(today);
@@ -36,7 +36,7 @@ for (let d = 13; d >= 0; d--) {
   const dateStr = day.toISOString().slice(0, 10);
   for (const emp of employees) {
     if (Math.random() < 0.15) continue; // some missed days
-    stmts.push({
+    await db.execute({
       sql: `INSERT INTO reports
               (employee_name, date, project, work_done, hours, blockers, tomorrow_plan, mood, progress)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -48,8 +48,9 @@ for (let d = 13; d >= 0; d--) {
         Math.floor(Math.random() * 101),
       ],
     });
+    inserted++;
   }
 }
 
-await db.batch(stmts, 'write');
-console.log(`Seeded ${stmts.length} sample reports across ${employees.length} employees.`);
+console.log(`Seeded ${inserted} sample reports across ${employees.length} employees.`);
+await db.raw.end();

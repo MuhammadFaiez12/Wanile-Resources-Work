@@ -3,6 +3,9 @@ import { db } from './db.js';
 /**
  * Builds the aggregate analytics payload for the PM dashboard.
  * Accepts optional { from, to, employee } filters (YYYY-MM-DD / name).
+ *
+ * SQL is Postgres (Supabase): ROUND() needs a numeric cast and COUNT()
+ * returns bigint, so counts are cast to int for clean JSON numbers.
  */
 export async function buildAnalytics({ from, to, employee } = {}) {
   const where = [];
@@ -16,30 +19,31 @@ export async function buildAnalytics({ from, to, employee } = {}) {
 
   const [totalsR, byEmpR, byDateR, moodR, byProjR] = await Promise.all([
     run(
-      `SELECT COUNT(*) AS total_reports,
-              COALESCE(SUM(hours),0)    AS total_hours,
-              COALESCE(AVG(hours),0)    AS avg_hours,
-              COALESCE(AVG(mood),0)     AS avg_mood,
-              COALESCE(AVG(progress),0) AS avg_progress,
-              COUNT(DISTINCT employee_name) AS active_employees
+      `SELECT COUNT(*)::int                       AS total_reports,
+              COALESCE(SUM(hours),0)              AS total_hours,
+              COALESCE(AVG(hours),0)              AS avg_hours,
+              COALESCE(AVG(mood),0)               AS avg_mood,
+              COALESCE(AVG(progress),0)           AS avg_progress,
+              COUNT(DISTINCT employee_name)::int  AS active_employees
        FROM reports ${whereSql}`
     ),
     run(
-      `SELECT employee_name AS name, COUNT(*) AS reports,
-              ROUND(SUM(hours),1) AS hours, ROUND(AVG(mood),2) AS mood,
-              ROUND(AVG(progress),0) AS progress
+      `SELECT employee_name AS name, COUNT(*)::int AS reports,
+              ROUND(SUM(hours)::numeric,1)    AS hours,
+              ROUND(AVG(mood)::numeric,2)     AS mood,
+              ROUND(AVG(progress)::numeric,0) AS progress
        FROM reports ${whereSql}
        GROUP BY employee_name ORDER BY hours DESC`
     ),
     run(
-      `SELECT date, ROUND(SUM(hours),1) AS hours, COUNT(*) AS reports,
-              ROUND(AVG(mood),2) AS mood
+      `SELECT date, ROUND(SUM(hours)::numeric,1) AS hours, COUNT(*)::int AS reports,
+              ROUND(AVG(mood)::numeric,2) AS mood
        FROM reports ${whereSql}
        GROUP BY date ORDER BY date ASC`
     ),
-    run(`SELECT mood, COUNT(*) AS count FROM reports ${whereSql} GROUP BY mood`),
+    run(`SELECT mood, COUNT(*)::int AS count FROM reports ${whereSql} GROUP BY mood`),
     run(
-      `SELECT project AS name, ROUND(SUM(hours),1) AS hours, COUNT(*) AS reports
+      `SELECT project AS name, ROUND(SUM(hours)::numeric,1) AS hours, COUNT(*)::int AS reports
        FROM reports ${whereSql}
        GROUP BY project ORDER BY hours DESC LIMIT 12`
     ),
@@ -60,6 +64,14 @@ export async function buildAnalytics({ from, to, employee } = {}) {
   }));
 
   const num = (v) => Number(v) || 0;
+  // Numeric columns come back as strings from postgres.js — coerce for the UI.
+  const toNums = (rows, keys) =>
+    rows.map((r) => {
+      const o = { ...r };
+      for (const k of keys) o[k] = num(o[k]);
+      return o;
+    });
+
   return {
     totals: {
       total_reports: num(t.total_reports),
@@ -69,10 +81,10 @@ export async function buildAnalytics({ from, to, employee } = {}) {
       avg_progress: Math.round(num(t.avg_progress)),
       active_employees: num(t.active_employees),
     },
-    hoursByEmployee: byEmpR.rows,
-    hoursByDate: byDateR.rows,
+    hoursByEmployee: toNums(byEmpR.rows, ['reports', 'hours', 'mood', 'progress']),
+    hoursByDate: toNums(byDateR.rows, ['hours', 'reports', 'mood']),
     moodDistribution,
-    hoursByProject: byProjR.rows,
+    hoursByProject: toNums(byProjR.rows, ['hours', 'reports']),
     blockers: blockersR.rows,
   };
 }
