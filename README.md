@@ -15,7 +15,7 @@ them on Slack, and analysing performance from a private PM dashboard.
 ### Tech stack
 - **Frontend:** React + Tailwind CSS (Vite) + Recharts
 - **API:** Vercel serverless functions (`/api/*`)
-- **Database:** [Turso](https://turso.tech) (libSQL — SQLite-compatible, serverless-friendly)
+- **Database:** [Supabase](https://supabase.com) Postgres (via the `postgres` driver over the pooled connection)
 - **Slack:** `@slack/web-api` (stateless, ideal for serverless)
 - **Scheduling:** any external cron service hitting `/api/reminder`
 
@@ -30,9 +30,12 @@ stack was adapted:
 | Concern | Local server version | Vercel version |
 |---------|----------------------|----------------|
 | API | Long-running Express app | Stateless functions in `/api` |
-| Database | SQLite file on disk | Turso (libSQL) over the network |
+| Database | SQLite file on disk | Supabase Postgres over the pooled connection |
 | 4:30 PM reminder | `node-cron` in-process | External cron → `POST /api/reminder` |
 | Slack | Bolt SDK (socket) | `@slack/web-api` (stateless) |
+
+The schema is created automatically on first request (`CREATE TABLE IF NOT EXISTS`),
+so no manual migration step is needed — just point `POSTGRES_URL` at Supabase.
 
 ```
 client/                 React app (Vite) → built to client/dist (static)
@@ -51,15 +54,14 @@ vercel.json             build + SPA-fallback config
 
 ---
 
-## Deploy to Vercel
+## Deploy to Vercel (with Supabase)
 
-### 1. Create a Turso database (free)
-```bash
-# https://docs.turso.tech/quickstart
-turso db create dwr
-turso db show dwr --url            # → TURSO_DATABASE_URL (libsql://…)
-turso db tokens create dwr         # → TURSO_AUTH_TOKEN
-```
+### 1. Connect Supabase to your Vercel project
+Easiest path — Vercel's native integration auto-injects `POSTGRES_URL`:
+- Vercel project → **Storage** (or **Integrations**) → **Supabase** → connect your project.
+
+Or set it manually: Supabase → **Project Settings → Database → Connection string →
+Transaction pooler** (port 6543), and paste that as `POSTGRES_URL` in Vercel.
 
 ### 2. Import the repo into Vercel
 - Vercel → **Add New… → Project** → import this Git repo.
@@ -69,8 +71,7 @@ turso db tokens create dwr         # → TURSO_AUTH_TOKEN
 
 | Variable | Required | Purpose |
 |----------|:--------:|---------|
-| `TURSO_DATABASE_URL` | ✅ | libSQL connection URL |
-| `TURSO_AUTH_TOKEN` | ✅ | libSQL auth token |
+| `POSTGRES_URL` | ✅ | Supabase pooled connection string (auto-set by the integration) |
 | `PM_PIN` | ✅ | Dashboard access PIN |
 | `CRON_SECRET` | ✅ | Shared secret the cron must send to `/api/reminder` |
 | `SLACK_BOT_TOKEN` | optional | Bot token `xoxb-…` (`chat:write`, `chat:write.public`) |
@@ -80,9 +81,11 @@ turso db tokens create dwr         # → TURSO_AUTH_TOKEN
 > Slack is optional — with no token set, reports still save and Slack calls just log.
 
 ### 4. Deploy & seed
-Click **Deploy**. Then load sample data into Turso (optional):
+Click **Deploy** (the schema auto-creates on the first request). To load sample
+data into Supabase (optional), run from your machine against the **direct**
+(non-pooled, port 5432) connection string:
 ```bash
-TURSO_DATABASE_URL=libsql://… TURSO_AUTH_TOKEN=… npm run seed
+POSTGRES_URL='postgres://…:5432/postgres' npm run seed
 ```
 
 ### 5. Schedule the 4:30 PM reminder (external cron)
@@ -95,14 +98,19 @@ On the free plan, use a free scheduler such as **cron-job.org**:
 
 ## Local development
 
-Uses the Vercel CLI so functions + frontend run together. With no Turso vars set,
-the DB falls back to a local `local.db` file — zero setup.
+Set `POSTGRES_URL` in `.env.local` (your Supabase connection string, or any local
+Postgres). Then run the bundled Express runner, which mounts the same `/api`
+functions and serves the built client on one port:
 
 ```bash
-npm install            # function deps (@libsql/client, @slack/web-api)
-npm run seed           # optional sample data into local.db
-npx vercel dev         # serves UI + /api on http://localhost:3000
+npm install                       # postgres, @slack/web-api, express (dev)
+cp .env.example .env.local        # add your POSTGRES_URL + PM_PIN
+cd client && npm install && npm run build && cd ..
+npm run seed                      # optional sample data
+npm run local                     # → http://localhost:3000
 ```
+
+(`npx vercel dev` also works if you have the Vercel CLI and prefer HMR.)
 
 - Employee form → http://localhost:3000/submit
 - PM dashboard → http://localhost:3000/dashboard  (default PIN: `1234`)

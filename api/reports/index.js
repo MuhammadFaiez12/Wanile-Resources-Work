@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     const r = await db.execute({
       sql: `INSERT INTO reports
               (employee_name, date, project, work_done, hours, blockers, tomorrow_plan, mood, progress)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       args: [
         value.employee_name, value.date, value.project, value.work_done,
         value.hours, value.blockers, value.tomorrow_plan, value.mood, value.progress,
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     // the instant we respond, so we can't fire-and-forget it.
     await notifySubmission(value.employee_name, value.date).catch(() => {});
 
-    return json(res, 201, { id: Number(r.lastInsertRowid), ...value });
+    return json(res, 201, { id: Number(r.rows[0].id), ...value });
   }
 
   // List reports (PM only) with optional filters
